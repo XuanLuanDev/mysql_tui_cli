@@ -19,9 +19,12 @@ jobs:
           - os: ubuntu-latest
             artifact_name: mysql_tui_cli
             asset_name: mysql_tui_cli-linux-amd64
-          - os: macos-latest
+          - os: macos-13
             artifact_name: mysql_tui_cli
             asset_name: mysql_tui_cli-macos-amd64
+          - os: macos-14
+            artifact_name: mysql_tui_cli
+            asset_name: mysql_tui_cli-macos-arm64
           - os: windows-latest
             artifact_name: mysql_tui_cli.exe
             asset_name: mysql_tui_cli-windows-amd64.exe

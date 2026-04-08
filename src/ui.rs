@@ -14,6 +14,12 @@ pub fn ui(f: &mut Frame, app: &mut App) {
 
     if let Some(ref err) = app.error_msg {
         draw_error_popup(f, err);
+    } else if let Some(ref info) = app.info_msg {
+        draw_info_popup(f, info);
+    }
+
+    if app.export_menu_active {
+        draw_export_menu(f, app);
     }
 }
 
@@ -56,7 +62,7 @@ fn draw_connection_screen(f: &mut Frame, app: &mut App) {
         )
         .split(area);
 
-    let title = Paragraph::new("Nhập thông tin kết nối")
+    let title = Paragraph::new("Enter connection information")
         .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
         .alignment(Alignment::Center);
     f.render_widget(title, chunks[0]);
@@ -93,7 +99,7 @@ fn draw_connection_screen(f: &mut Frame, app: &mut App) {
 
     // Connect button
     let active = app.active_field == ConnectionField::ConnectButton;
-    let connect_btn = Paragraph::new(if active { "[ Kết nối (Enter) ]" } else { "Kết nối (Enter)" })
+    let connect_btn = Paragraph::new(if active { "[ Connect (Enter) ]" } else { "Connect (Enter)" })
         .style(if active { Style::default().fg(Color::Black).bg(Color::LightGreen) } else { Style::default().fg(Color::White) })
         .alignment(Alignment::Center)
         .block(Block::default().borders(Borders::ALL).style(if active { Style::default().fg(Color::LightGreen) } else { Style::default().fg(Color::DarkGray) }));
@@ -116,8 +122,8 @@ fn draw_main_screen(f: &mut Frame, app: &mut App) {
     use crate::app::SidebarMode;
 
     let (title, items_len, emoji, help_text) = match app.sidebar_mode {
-        SidebarMode::Databases => (" Databases", app.databases.len(), "🗄️", " [Alt+Enter] Chọn"),
-        SidebarMode::Tables => (" Tables", app.tables.len(), "🗃️", " [Alt+Back] Trở lại"),
+        SidebarMode::Databases => (" Databases", app.databases.len(), "🗄️", " [Alt+Enter] Select"),
+        SidebarMode::Tables => (" Tables", app.tables.len(), "🗃️", " [Alt+Back] Back"),
     };
 
     let tables_block = Block::default()
@@ -171,13 +177,13 @@ fn draw_main_screen(f: &mut Frame, app: &mut App) {
         .split(main_chunks[1]);
 
     // Header
-    let header = Paragraph::new(" F5: Thực thi | ESC: Thoát | Mũi tên: Editor | Ctrl+Up/Down: Cuộn bảng | Alt+Up/Down: Cuộn Sidebar ")
+    let header = Paragraph::new(" F5: Execute | ESC: Quit | Ctrl+E/F6-8: Export | Arrows: Editor | Ctrl+Up/Down: Scroll Table | Alt+Up/Down: Scroll Sidebar ")
         .style(Style::default().fg(Color::White).bg(Color::Blue))
         .alignment(Alignment::Center);
     f.render_widget(header, chunks[0]);
 
     // Editor Area
-    let editor_block = Block::default().borders(Borders::ALL).title(" Trình biên tập SQL ");
+    let editor_block = Block::default().borders(Borders::ALL).title(" SQL Editor ");
     let text_spans = app.query_editor.highlight();
     let pad_cursor_y = app.query_editor.cursor_y as u16;
     let pad_cursor_x = app.query_editor.cursor_x as u16;
@@ -194,7 +200,7 @@ fn draw_main_screen(f: &mut Frame, app: &mut App) {
 
     // Results Table Area
     if app.columns.is_empty() {
-        let block = Block::default().borders(Borders::ALL).title(" Kết quả ");
+        let block = Block::default().borders(Borders::ALL).title(" Results ");
         f.render_widget(block, chunks[2]);
     } else {
         let header_cells = app.columns.iter().map(|h| Cell::from(h.as_str()).style(Style::default().fg(Color::Yellow)));
@@ -242,7 +248,7 @@ fn draw_main_screen(f: &mut Frame, app: &mut App) {
 
         let table = Table::new(rows, widths)
             .header(table_header)
-            .block(Block::default().borders(Borders::ALL).title(format!(" Kết quả ({} dòng) ", app.rows.len())))
+            .block(Block::default().borders(Borders::ALL).title(format!(" Results ({} rows) ", app.rows.len())))
             .row_highlight_style(Style::default().add_modifier(Modifier::REVERSED).fg(Color::LightCyan))
             .highlight_symbol(">> ");
 
@@ -290,15 +296,50 @@ fn draw_main_screen(f: &mut Frame, app: &mut App) {
     }
 }
 
+fn draw_export_menu(f: &mut Frame, app: &mut App) {
+    use ratatui::widgets::{List, ListItem};
+    let area = centered_rect(30, 30, f.area());
+
+    let options = vec!["1. Export to CSV (F6)", "2. Export to JSON (F7)", "3. Export to Excel (F8)"];
+    let mut items = vec![];
+    
+    for (i, opt) in options.iter().enumerate() {
+        let style = if i == app.export_menu_selected {
+            Style::default().bg(Color::DarkGray).fg(Color::Yellow)
+        } else {
+            Style::default().fg(Color::White)
+        };
+        items.push(ListItem::new(*opt).style(style));
+    }
+
+    let list = List::new(items)
+        .block(Block::default().title(" Select Export Format ").borders(Borders::ALL).style(Style::default().bg(Color::Black)));
+
+    f.render_widget(Clear, area);
+    f.render_widget(list, area);
+}
+
 fn draw_error_popup(f: &mut Frame, msg: &str) {
     let area = centered_rect(60, 20, f.area());
     let paragraph = Paragraph::new(msg)
-        .block(Block::default().title(" Lỗi ").borders(Borders::ALL))
+        .block(Block::default().title(" Error ").borders(Borders::ALL))
         .style(Style::default().fg(Color::Red).bg(Color::Black))
         .wrap(ratatui::widgets::Wrap { trim: true })
         .alignment(Alignment::Center);
 
     f.render_widget(Clear, area); // clear background
+    f.render_widget(paragraph, area);
+}
+
+fn draw_info_popup(f: &mut Frame, msg: &str) {
+    let area = centered_rect(60, 20, f.area());
+    let paragraph = Paragraph::new(msg)
+        .block(Block::default().title(" Success ").borders(Borders::ALL))
+        .style(Style::default().fg(Color::Green).bg(Color::Black))
+        .wrap(ratatui::widgets::Wrap { trim: true })
+        .alignment(Alignment::Center);
+
+    f.render_widget(Clear, area);
     f.render_widget(paragraph, area);
 }
 

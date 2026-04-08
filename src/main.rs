@@ -50,13 +50,47 @@ fn run_app(
 
         if let Event::Key(key) = event::read()? {
             app.error_msg = None; // clear error upon any key press
+            app.info_msg = None;
             
             if key.kind == KeyEventKind::Press {
                 // Global quit
                 if key.code == KeyCode::Esc {
+                    if app.export_menu_active {
+                        app.export_menu_active = false;
+                        continue;
+                    }
+                    if app.query_editor.suggestion_active {
+                        app.query_editor.suggestion_active = false;
+                        app.query_editor.suggestions.clear();
+                        continue;
+                    }
                     return Ok(()); // Always quit on ESC
                 }
                 
+                if app.export_menu_active {
+                    match key.code {
+                        KeyCode::Up => {
+                            if app.export_menu_selected > 0 { app.export_menu_selected -= 1; }
+                            else { app.export_menu_selected = 2; }
+                        }
+                        KeyCode::Down => {
+                            if app.export_menu_selected < 2 { app.export_menu_selected += 1; }
+                            else { app.export_menu_selected = 0; }
+                        }
+                        KeyCode::Enter => {
+                            app.export_menu_active = false;
+                            match app.export_menu_selected {
+                                0 => app.export_to_csv(),
+                                1 => app.export_to_json(),
+                                2 => app.export_to_excel(),
+                                _ => {}
+                            }
+                        }
+                        _ => {}
+                    }
+                    continue;
+                }
+
                 match app.screen {
                     Screen::Connection => {
                         match key.code {
@@ -134,6 +168,13 @@ fn run_app(
                                     app.execute_query();
                                     app.query_editor.suggestion_active = false;
                                 }
+                                KeyCode::F(6) => app.export_to_csv(),
+                                KeyCode::F(7) => app.export_to_json(),
+                                KeyCode::F(8) => app.export_to_excel(),
+                                KeyCode::Char('e') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                                    app.export_menu_active = true;
+                                    app.export_menu_selected = 0;
+                                }
                                 KeyCode::Char(c) => {
                                     app.query_editor.insert_char(c);
                                 }
@@ -153,11 +194,13 @@ fn run_app(
                                     }
                                 }
                                 KeyCode::Left => {
-                                    app.query_editor.move_left();
+                                    let shift = key.modifiers.contains(KeyModifiers::SHIFT);
+                                    app.query_editor.move_left(shift);
                                     app.query_editor.update_suggestions();
                                 }
                                 KeyCode::Right => {
-                                    app.query_editor.move_right();
+                                    let shift = key.modifiers.contains(KeyModifiers::SHIFT);
+                                    app.query_editor.move_right(shift);
                                     app.query_editor.update_suggestions();
                                 }
                                 KeyCode::Up => {
@@ -166,7 +209,8 @@ fn run_app(
                                     } else if key.modifiers.contains(KeyModifiers::ALT) {
                                         app.scroll_table_list(-1);
                                     } else {
-                                        app.query_editor.move_up();
+                                        let shift = key.modifiers.contains(KeyModifiers::SHIFT);
+                                        app.query_editor.move_up(shift);
                                         app.query_editor.suggestion_active = false;
                                         app.query_editor.suggestions.clear();
                                     }
@@ -177,7 +221,8 @@ fn run_app(
                                     } else if key.modifiers.contains(KeyModifiers::ALT) {
                                         app.scroll_table_list(1);
                                     } else {
-                                        app.query_editor.move_down();
+                                        let shift = key.modifiers.contains(KeyModifiers::SHIFT);
+                                        app.query_editor.move_down(shift);
                                         app.query_editor.suggestion_active = false;
                                         app.query_editor.suggestions.clear();
                                     }

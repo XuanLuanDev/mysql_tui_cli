@@ -17,8 +17,8 @@ The application features an interactive Terminal User Interface (TUI) that bring
 - **Intuitive TUI Context:** Connect easily using a structured, multi-field terminal login form—designed just like professional database tools.
 > *- **Giao diện trực quan (TUI):** Form đăng nhập trực quan phân chia các ô nhập Host, Port, Username... trực tiếp trên terminal.*
 
-- **Smart SQL Editor:** A multi-line query editor that features regex syntax highlighting and a floating popup that auto-suggests SQL keywords (`Tab` to complete) as you type.
-> *- **Smart SQL Editor:** Trình biên tập đa dòng tiện lợi. Tốc độ gõ được tối ưu hóa với tính năng tự đánh dấu màu (Syntax Highlight) và Gợi ý hoàn thành chữ (Auto-complete popup) siêu việt.*
+- **Smart SQL Editor:** A multi-line query editor that features regex syntax highlighting, text selection (`Shift+Arrows`), and a floating popup that auto-suggests SQL keywords (`Tab` to complete). It also supports running multiple split statements sequentially!
+> *- **Smart SQL Editor:** Trình biên tập đa dòng tiện lợi. Tốc độ gõ được tối ưu hóa với tính năng tự đánh dấu màu (Syntax Highlight), bôi đen mã lệnh (`Shift+Arrows`), hỗ trợ chạy tuần tự nhiều câu lệnh và Gợi ý hoàn thành chữ (Auto-complete popup) siêu việt.*
 
 - **Blazing Fast:** Instant startup and query execution backed by Rust's speed and memory safety.
 > *- **Siêu tốc độ:** Khởi chạy ngay lập tức nhờ vào khả năng kiểm soát bộ nhớ tối ưu của Rust.*
@@ -59,8 +59,8 @@ cargo build --release
 ## 📖 Usage Guide | Hướng dẫn kết nối
 1. Launch the app to view the **Connection Form**. *(Mở ứng dụng sẽ thấy Màn hình Chào Mừng và Form Đăng Nhập)*.
 2. Supply your Host, Port, Username, Password, and Database Name. Use the strictly-typed form controls (`Tab` to navigate, `Enter` to connect). *(Điền vào đơn điền thông tin, dùng phím `Tab` để nhảy dòng, nhấn `Enter` ở nút Connect).*
-3. Inside the **Main Editor**, you can type query commands (e.g., `SELECT * FROM users;`). The application will highlight your text and drop down auto-complete hints. *(Sau khi đăng nhập, gõ câu SQL cần tìm kiếm, và sử dụng gợi ý xuất hiện quanh chuột).*
-4. Press `F5` to execute queries. The results table will be painted at the bottom alongside any caught errors. *(Cuối cùng ấn `F5` để yêu cầu cơ sở dữ liệu trả kết quả. Bảng dữ liệu sẽ vẽ dưới màn hình).*
+3. Inside the **Main Editor**, you can type query commands (e.g., `SELECT * FROM users;`). The application will highlight your text and drop down auto-complete hints. Use `Shift + Arrows` to highlight/select specific queries. *(Sau khi đăng nhập, gõ câu SQL cần tìm kiếm. Có thể dùng `Shift + Mũi tên` để bôi đen phần lệnh muốn chạy, và sử dụng gợi ý xuất hiện quanh chuột).*
+4. Press `F5` to execute queries. Executes **selected text** if highlighted, otherwise runs everything. Multiple statements separated by `;` are executed sequentially. The results table will be painted at the bottom alongside any caught errors. *(Cuối cùng ấn `F5` để yêu cầu cơ sở dữ liệu trả kết quả. Chạy tuần tự nhiều câu lệnh qua dấu `;` ưu tiên vùng nội dung đang được bôi đen).*
 5. Hit `Esc` or `Ctrl+C` inside the general handler to quit the app safely. *(Phím `Esc` được dùng để thoát ứng dụng).*
 
 ---
@@ -73,6 +73,7 @@ cargo build --release
 | `F5` | Execute SQL Query / Xuất lệnh truy vấn dữ liệu | Main Editor |
 | `Esc` / `Ctrl+C` | Cancel & Exit application / Thoát ứng dụng | All |
 | `Up` / `Down` | Move text cursor freely / Di chuyển con trỏ chữ tự do | Main Editor |
+| `Shift + Arrows` | Select / Highlight specific text / Bôi đen vùng văn bản | Main Editor |
 | `Up` / `Down` | Navigate Autocomplete popup / Cuộn danh sách chữ gợi ý | Auto-Complete Popup |
 | `Tab` | Confirm Autocomplete selection / Chốt từ khóa đang gợi ý | Auto-Complete Popup |
 | `Ctrl + Up` / `Down` | Scroll the Results Data Table / Cuộn bảng dữ liệu bên dưới | Results Table |

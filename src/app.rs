@@ -45,6 +45,9 @@ pub struct App<'a> {
     pub tables: Vec<String>,
     pub sidebar_mode: SidebarMode,
     pub databases: Vec<String>,
+    pub info_msg: Option<String>,
+    pub export_menu_active: bool,
+    pub export_menu_selected: usize,
 }
 
 impl<'a> App<'a> {
@@ -85,6 +88,9 @@ impl<'a> App<'a> {
             tables: vec![],
             sidebar_mode: SidebarMode::Tables,
             databases: vec![],
+            info_msg: None,
+            export_menu_active: false,
+            export_menu_selected: 0,
         }
     }
 
@@ -128,36 +134,47 @@ impl<'a> App<'a> {
                 }
             }
             Err(e) => {
-                self.error_msg = Some(format!("Lỗi kết nối: {}", e));
+                self.error_msg = Some(format!("Connection error: {}", e));
             }
         }
     }
 
     pub fn execute_query(&mut self) {
-        let mut query = self.query_editor.get_text();
+        let text = self.query_editor.get_executable_text();
+        let queries: Vec<&str> = text.split(';').map(|q| q.trim()).filter(|q| !q.is_empty()).collect();
         
-        let upper_query = query.trim().to_uppercase();
-        if upper_query.starts_with("SELECT") && !upper_query.contains("LIMIT") {
-            let limit_str = if query.trim().ends_with(";") {
-                let stripped = query.trim().strip_suffix(";").unwrap_or(&query);
-                format!("{} LIMIT 1000;", stripped)
-            } else {
-                format!("{} LIMIT 1000", query)
-            };
-            query = limit_str;
+        if queries.is_empty() {
+            return;
         }
 
-        match self.executor.execute(&query) {
-            Ok((cols, rows)) => {
-                self.columns = cols;
-                self.rows = rows;
-                self.error_msg = None;
-                self.vertical_scroll = 0;
-                self.horizontal_scroll = 0;
-                self.table_state.select(if self.rows.is_empty() { None } else { Some(0) });
+        self.error_msg = None;
+
+        for (i, q) in queries.iter().enumerate() {
+            let mut query = q.to_string();
+            let upper_query = query.to_uppercase();
+            if upper_query.starts_with("SELECT") && !upper_query.contains("LIMIT") {
+                query = format!("{} LIMIT 1000", query);
             }
-            Err(e) => {
-                self.error_msg = Some(e);
+
+            match self.executor.execute(&query) {
+                Ok((cols, rows)) => {
+                    // We keep results from the last query that returned columns, or the last query executed.
+                    // To avoid erasing a previous SELECT result with a subsequent UPDATE, we can just update if it's the last one OR check if cols are not empty.
+                    // For simplicity, just update UI with the latest result
+                    self.columns = cols;
+                    self.rows = rows;
+                    self.vertical_scroll = 0;
+                    self.horizontal_scroll = 0;
+                    self.table_state.select(if self.rows.is_empty() { None } else { Some(0) });
+                }
+                Err(e) => {
+                    self.error_msg = Some(if queries.len() > 1 {
+                        format!("Error in query {}: {}", i + 1, e)
+                    } else {
+                        e
+                    });
+                    break; // Stop executing on first error
+                }
             }
         }
     }
@@ -213,6 +230,97 @@ impl<'a> App<'a> {
             if let Ok(fetched_dbs) = self.executor.get_databases() {
                 self.databases = fetched_dbs;
                 self.table_list_state.select(Some(0));
+            }
+        }
+    }
+
+    pub fn export_to_csv(&mut self) {
+        if self.columns.is_empty() {
+            self.error_msg = Some("No data to export.".to_string());
+            return;
+        }
+
+        if let Some(path) = rfd::FileDialog::new()
+            .add_filter("CSV", &["csv"])
+            .set_file_name("export.csv")
+            .save_file() {
+            
+            match csv::Writer::from_path(&path) {
+                Ok(mut wtr) => {
+                    let _ = wtr.write_record(&self.columns);
+                    for row in &self.rows {
+                        let _ = wtr.write_record(row);
+                    }
+                    if let Err(e) = wtr.flush() {
+                        self.error_msg = Some(format!("Failed to write CSV: {}", e));
+                    } else {
+                        self.info_msg = Some(format!("Successfully exported to {:?}", path));
+                    }
+                }
+                Err(e) => {
+                    self.error_msg = Some(format!("Failed to create CSV: {}", e));
+                }
+            }
+        }
+    }
+
+    pub fn export_to_json(&mut self) {
+        if self.columns.is_empty() {
+            self.error_msg = Some("No data to export.".to_string());
+            return;
+        }
+
+        if let Some(path) = rfd::FileDialog::new()
+            .add_filter("JSON", &["json"])
+            .set_file_name("export.json")
+            .save_file() {
+            
+            let mut data = Vec::new();
+            for row in &self.rows {
+                let mut map = std::collections::HashMap::new();
+                for (i, col_name) in self.columns.iter().enumerate() {
+                    let val = row.get(i).cloned().unwrap_or_default();
+                    map.insert(col_name.clone(), val);
+                }
+                data.push(map);
+            }
+
+            match std::fs::write(&path, serde_json::to_string_pretty(&data).unwrap_or_default()) {
+                Ok(_) => self.info_msg = Some(format!("Successfully exported to {:?}", path)),
+                Err(e) => self.error_msg = Some(format!("Failed to write JSON: {}", e)),
+            }
+        }
+    }
+
+    pub fn export_to_excel(&mut self) {
+        if self.columns.is_empty() {
+            self.error_msg = Some("No data to export.".to_string());
+            return;
+        }
+
+        if let Some(path) = rfd::FileDialog::new()
+            .add_filter("Excel", &["xlsx"])
+            .set_file_name("export.xlsx")
+            .save_file() {
+            
+            let mut workbook = rust_xlsxwriter::Workbook::new();
+            let worksheet = workbook.add_worksheet();
+
+            // Write headers
+            for (col_num, col_name) in self.columns.iter().enumerate() {
+                let _ = worksheet.write_string(0, col_num as u16, col_name);
+            }
+
+            // Write rows
+            for (row_num, row_data) in self.rows.iter().enumerate() {
+                for (col_num, cell_data) in row_data.iter().enumerate() {
+                    let _ = worksheet.write_string((row_num + 1) as u32, col_num as u16, cell_data);
+                }
+            }
+
+            match workbook.save(&path) {
+                Ok(_) => self.info_msg = Some(format!("Successfully exported to {:?}", path)),
+                Err(e) => self.error_msg = Some(format!("Failed to write Excel: {}", e)),
             }
         }
     }

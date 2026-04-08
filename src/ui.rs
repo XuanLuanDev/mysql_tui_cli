@@ -112,7 +112,7 @@ fn draw_main_screen(f: &mut Frame, app: &mut App) {
     // -------------------------------------------------------------
     // LEFT SIDEBAR: Database Tables / Databases Explorer
     // -------------------------------------------------------------
-    use ratatui::widgets::{List, ListItem};
+    use ratatui::widgets::{List, ListItem, Scrollbar, ScrollbarOrientation, ScrollbarState};
     use crate::app::SidebarMode;
 
     let (title, items_len, emoji, help_text) = match app.sidebar_mode {
@@ -137,6 +137,24 @@ fn draw_main_screen(f: &mut Frame, app: &mut App) {
         .highlight_symbol(">> ");
     f.render_stateful_widget(list, main_chunks[0], &mut app.table_list_state);
 
+    let mut scrollbar_state = ScrollbarState::default()
+        .content_length(list_data.len())
+        .position(app.table_list_state.selected().unwrap_or(0));
+
+    let scrollbar = Scrollbar::default()
+        .orientation(ScrollbarOrientation::VerticalRight)
+        .begin_symbol(Some("▲"))
+        .end_symbol(Some("▼"));
+
+    let scrollbar_area = Rect {
+        x: main_chunks[0].right().saturating_sub(1),
+        y: main_chunks[0].y + 1,
+        width: 1,
+        height: main_chunks[0].height.saturating_sub(2),
+    };
+
+    f.render_stateful_widget(scrollbar, scrollbar_area, &mut scrollbar_state);
+
     // -------------------------------------------------------------
     // RIGHT CONTENT: Header, Editor, Results
     // -------------------------------------------------------------
@@ -153,7 +171,7 @@ fn draw_main_screen(f: &mut Frame, app: &mut App) {
         .split(main_chunks[1]);
 
     // Header
-    let header = Paragraph::new(" F5: Thực thi truy vấn | ESC/Ctrl+C: Thoát | Phím mũi tên: Di chuyển cursor ")
+    let header = Paragraph::new(" F5: Thực thi | ESC: Thoát | Mũi tên: Editor | Ctrl+Up/Down: Cuộn bảng | Alt+Up/Down: Cuộn Sidebar ")
         .style(Style::default().fg(Color::White).bg(Color::Blue))
         .alignment(Alignment::Center);
     f.render_widget(header, chunks[0]);
@@ -183,18 +201,22 @@ fn draw_main_screen(f: &mut Frame, app: &mut App) {
         let table_header = Row::new(header_cells).style(Style::default().bg(Color::DarkGray)).height(1).bottom_margin(1);
 
         let rows: Vec<Row> = app.rows.iter().map(|r| {
-            let cells = r.iter().map(|c| {
+            let mut max_lines = 1;
+            let cells: Vec<Cell> = r.iter().map(|c| {
+                let lines_in_c = c.lines().count();
+                if lines_in_c > max_lines { max_lines = lines_in_c; }
+
                 let char_count = c.chars().count();
-                let text = if char_count > 50 {
-                    let mut s = c.chars().take(47).collect::<String>();
+                let text = if char_count > 250 && lines_in_c == 1 {
+                    let mut s = c.chars().take(247).collect::<String>();
                     s.push_str("...");
                     s
                 } else {
                     c.to_string()
                 };
                 Cell::from(text)
-            });
-            Row::new(cells).height(1)
+            }).collect();
+            Row::new(cells).height(max_lines as u16)
         }).collect();
 
         // Calculate maximum visual widths dynamically
@@ -206,14 +228,16 @@ fn draw_main_screen(f: &mut Frame, app: &mut App) {
         for row in app.rows.iter() {
             for (i, col) in row.iter().enumerate() {
                 if i < computed_widths.len() {
-                    computed_widths[i] = computed_widths[i].max(col.chars().count());
+                    let max_line_w = col.lines().map(|l| l.chars().count()).max().unwrap_or(0);
+                    computed_widths[i] = computed_widths[i].max(max_line_w);
                 }
             }
         }
         
+        // We use Min(width) to allow columns to naturally fit their content unless they exceed horizontal space
         let widths: Vec<Constraint> = computed_widths
             .into_iter()
-            .map(|w| Constraint::Length(w.min(50) as u16 + 2)) // pad slightly
+            .map(|w| Constraint::Min(w.min(250) as u16 + 2))
             .collect();
 
         let table = Table::new(rows, widths)

@@ -134,7 +134,19 @@ impl<'a> App<'a> {
     }
 
     pub fn execute_query(&mut self) {
-        let query = self.query_editor.get_text();
+        let mut query = self.query_editor.get_text();
+        
+        let upper_query = query.trim().to_uppercase();
+        if upper_query.starts_with("SELECT") && !upper_query.contains("LIMIT") {
+            let limit_str = if query.trim().ends_with(";") {
+                let stripped = query.trim().strip_suffix(";").unwrap_or(&query);
+                format!("{} LIMIT 1000;", stripped)
+            } else {
+                format!("{} LIMIT 1000", query)
+            };
+            query = limit_str;
+        }
+
         match self.executor.execute(&query) {
             Ok((cols, rows)) => {
                 self.columns = cols;
